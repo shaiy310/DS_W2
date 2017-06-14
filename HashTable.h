@@ -60,12 +60,15 @@ class HashTable {
 public:
 	static const int TABLE_SIZE = 79;
 	class NotFound : public std::exception {};
-	class InvalidKey : public std::exception {};
+	class InvalidArg : public std::exception {};
 	class CollidingKeys : public std::exception {};
 
 	// ~~~ C'tor ~~~
-	HashTable(int size=TABLE_SIZE, hash_func hash1=Multiply, hash_func hash2=Multiply) : 
-		size(size), length(0), func1(hash1), func2(hash2) {
+	HashTable(int min_size=TABLE_SIZE, hash_func hash1=Multiply, hash_func hash2=Multiply) : 
+		minimum_size(min_size), size(min_size), length(0), func1(hash1), func2(hash2) {
+		
+		this->min_threshold = 0.25;
+		this->max_threshold = 0.75;
 		
 		this->init_table();
 	}
@@ -77,24 +80,53 @@ public:
 	
 	// ~~~ properties ~~~
 	// get the number of items in the table.
-	int Count() { return this->length; }
+	int Count() const {
+		return this->length;
+	}
+	
+	// get the threshold for expanding the table.
+	double GetMaxThreshold() const {
+		return this->max_threshold;
+	}
+	
+	// set the threshold for expanding the table.
+	void SetMaxThreshold(double new_threshold) {
+		// the maximum cant be larger than 1 because 1 represent a full table.
+		// also, it can't be below the minimum threshold for obvious reasons.
+		if ((new_threshold > 1) || (new_threshold <= this->min_threshold)) {
+			throw InvalidArg();
+		}
+		this->max_threshold = new_threshold;
+	}
+	
+	// get the threshold for reducing the table.
+	double GetMinThreshold() const {
+		return this->min_threshold;
+	}
+	
+	// set the threshold for reducing the table.
+	void SetMinThreshold(double new_threshold) {
+		// the minimum cant be non-positive number because 0 represent an empty table.
+		// also, it can't be over the maximum threshold for obvious reasons.
+		if ((new_threshold <= 0) || (new_threshold >= this->max_threshold)) {
+			throw InvalidArg();
+		}
+		this->min_threshold = new_threshold;
+	}
+	
 	#ifndef NDEBUG
 	// get the number of max items in the table. (used for testing only
 	int Size() { return this->size; }
 	#endif
 	
 	
-	D Get(int key) {
+	D Get(int key) const {
 		int hash = this->calculate_hash(key, true);
 		
 		return this->table[hash]->GetData();
 	}
 	
 	void Add(int key, D data) {
-		if (this->length == this->size) {
-			this->resize();
-		}
-		
 		int hash = this->calculate_hash(key, false);
 		// incase we override a key, destroy the old instance
 		if (this->table[hash] != NULL) {
@@ -103,6 +135,10 @@ public:
 		
 		this->table[hash] = new HashEntry<D>(key, data);
 		++(this->length);
+		
+		if (this->length >= (int)(this->size * this->max_threshold)) {
+			this->resize(true);
+		}
 	}
 
 	void Remove(int key) {
@@ -110,6 +146,11 @@ public:
 		
 		this->table[hash]->MarkDelete();
 		--(this->length);
+		
+		if ((this->length <= (int)(this->size * this->min_threshold)) &&
+			((this->size / 2) >= this->minimum_size)) {
+			this->resize(false);
+		}
 	}
 	
 	void print_table() {
@@ -123,8 +164,12 @@ public:
 	}
 
 private:
+	int minimum_size;
 	int size;
 	int length;
+	double min_threshold;
+	double max_threshold;
+	
 	hash_func func1, func2;
 	HashEntry<D> ** table;
 	
@@ -138,20 +183,23 @@ private:
 		delete[] this->table;
 	}
 	
-	void resize() {
-		//create a larger table.
-		HashTable<D> temp(2 * this->size + 1, this->func1, this->func2);
+	void resize(bool should_expand) {
+		int new_size = (should_expand) ? (2 * this->size + 1) : (this->size / 2);
 		
-		// move all entries to the new table.
-		for (int i = 0; i < size; ++i) {
-			if (this->table[i] != NULL) {
+		//create a larger table.
+		HashTable<D> temp(new_size, this->func1, this->func2);
+		
+		// move all entries to the new table. (skip deleted entries)
+		for (int i = 0; i < this->size; ++i) {
+			if ((this->table[i] != NULL) && 
+				(this->table[i]->GetKey() != HashEntry<D>::DELETED)) {
 				temp.Add(this->table[i]->GetKey(), this->table[i]->GetData());
 			}
 		}
 		
 		// replace the old table with the new one.
 		this->clear_table();
-		this->size = 2 * size + 1;
+		this->size = new_size;
 		this->init_table();
 		
 		// clone the new table.
@@ -165,9 +213,9 @@ private:
 	
 	// get the correspanding location of key in table
 	// run time: O(n)
-	int calculate_hash(int key, bool should_exist) {
+	int calculate_hash(int key, bool should_exist) const {
 		if (key < 0) {
-			throw InvalidKey();
+			throw InvalidArg();
 		}
 		
 		int hash = this->func1(key, this->size) % this->size;

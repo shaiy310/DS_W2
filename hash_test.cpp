@@ -127,7 +127,7 @@ bool AddRemoveMultipleTest() {
 bool FullTableTest() {
 	HashTable<int> t(5, Multiply, One);
 	
-	// should create 5 resizes (	2*(2*(2*(2*(2*(5)+1)+1)+1)+1)+1 = 191	)
+	// should create 6 resizes ( 2*(2*(2*(2*(2*(2*(5)+1)+1)+1)+1)+1)+1 = 383 )
 	for (int i = 3000; i < 3150; ++i) {
 		ASSERT_NO_THROW(t.Add(i, 11 * i));
 		ASSERT_EQUALS(t.Get(i), 11 * i);
@@ -138,14 +138,14 @@ bool FullTableTest() {
 	
 	#ifndef NDEBUG
 	std::cout << ".";
-	ASSERT_EQUALS(t.Size(), 191);
+	ASSERT_EQUALS(t.Size(), 383);
 	#endif
 	
 	ASSERT_EQUALS(t.Count(), 150);
 	
 	for (int i = 0; i < 50; ++i) {
 		ASSERT_NO_THROW(t.Remove(3000 + i));
-		ASSERT_THROW(HashTable<int>::NotFound, t.Get(i));
+		ASSERT_THROW(HashTable<int>::NotFound, t.Get(3000 + i));
 	}
 	
 	//std::cout << "after removing 50: " << std::endl;
@@ -165,8 +165,77 @@ bool FullTableTest() {
 	ASSERT_EQUALS(t.Count(), 190);
 	#ifndef NDEBUG
 	std::cout << ".";
-	ASSERT_EQUALS(t.Size(), 191);
+	ASSERT_EQUALS(t.Size(), 383);
 	#endif
+	
+	return true;
+}
+
+bool ResizingTest() {
+	HashTable<int> t(10, Multiply, One);
+	
+	ASSERT_EQUALS(t.GetMinThreshold(), 0.25);
+	ASSERT_EQUALS(t.GetMaxThreshold(), 0.75);
+	
+	for (int i = 1; i <= 10; ++i) {
+		ASSERT_NO_THROW(t.Add(i*293, 11 * i));
+		ASSERT_EQUALS(t.Get(i*293), 11 * i);
+	}
+	
+	ASSERT_EQUALS(t.Count(), 10);
+	#ifndef NDEBUG
+	ASSERT_EQUALS(t.Size(), 21);
+	#endif
+	
+	for (int i = 11; i <= 15; ++i) {
+		ASSERT_NO_THROW(t.Add(i*293, 11 * i));
+		ASSERT_EQUALS(t.Get(i*293), 11 * i);
+	}
+	
+	ASSERT_EQUALS(t.Count(), 15);
+	#ifndef NDEBUG
+	ASSERT_EQUALS(t.Size(), 43);
+	#endif
+	
+	// start reducing
+	for (int i = 11; i <= 15; ++i) {
+		ASSERT_NO_THROW(t.Remove(i*293));
+		ASSERT_THROW(HashTable<int>::NotFound, t.Get(i*293));
+	}
+	
+	ASSERT_EQUALS(t.Count(), 10);
+	#ifndef NDEBUG
+	ASSERT_EQUALS(t.Size(), 21);
+	#endif
+	
+	for (int i = 6; i <= 10; ++i) {
+		ASSERT_NO_THROW(t.Remove(i*293));
+		ASSERT_THROW(HashTable<int>::NotFound, t.Get(i*293));
+	}
+	
+	ASSERT_EQUALS(t.Count(), 5);
+	#ifndef NDEBUG
+	ASSERT_EQUALS(t.Size(), 10);
+	#endif
+	
+	for (int i = 3; i <= 5; ++i) {
+		ASSERT_NO_THROW(t.Remove(i*293));
+		ASSERT_THROW(HashTable<int>::NotFound, t.Get(i*293));
+	}
+	
+	// got to minimum size, so it should stay the same even if we pass the threshold
+	ASSERT_EQUALS(t.Count(), 2);
+	#ifndef NDEBUG
+	ASSERT_EQUALS(t.Size(), 10);
+	#endif
+	
+	return true;
+}
+
+bool ResizingThresholdTest() {
+	HashTable<int> t;
+	
+	
 	
 	return true;
 }
@@ -176,7 +245,8 @@ int main() {
 	RUN_TEST(AddRemoveTest);
 	RUN_TEST(AddRemoveMultipleTest);
 	RUN_TEST(FullTableTest);
+	RUN_TEST(ResizingTest);
+	RUN_TEST(ResizingThresholdTest);
 	
-	return 0;
-	
+	return 0;	
 }
