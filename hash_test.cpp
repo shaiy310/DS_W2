@@ -137,7 +137,6 @@ bool FullTableTest() {
 	//t.print_table();
 	
 	#ifndef NDEBUG
-	std::cout << ".";
 	ASSERT_EQUALS(t.Size(), 383);
 	#endif
 	
@@ -164,7 +163,6 @@ bool FullTableTest() {
 	
 	ASSERT_EQUALS(t.Count(), 190);
 	#ifndef NDEBUG
-	std::cout << ".";
 	ASSERT_EQUALS(t.Size(), 383);
 	#endif
 	
@@ -233,13 +231,110 @@ bool ResizingTest() {
 }
 
 bool ResizingThresholdTest() {
-	HashTable<int> t;
+	// 1) init(40)		:	l=0  c=40  x=30  x=10
+	// 2) A(1->60)		:	l=60 c=163 x=122 n=40
+	// 3) n=0.4			:	l=60 c=163 x=122 n=65
+	// 4) A(61)			:	l=61 c=163 x=122 n=65
+	// 5) R(61)			:	l=60 c=81  x=60  n=32
+	// 6) x=0.9			:	l=60 c=81  x=72  n=32
+	// 7) A(61)			:	l=61 c=81  x=72  n=32
+	// 8) A(62->75)		:	l=75 c=163 x=146 n=65
+	// 9) R(1->40)		:	l=20 c=40  x=36  n=16
 	
+	// 1)
+	HashTable<int> t(40, Module);
+	// 2)
+	for (int i = 0; i < 60; ++i) {
+		ASSERT_NO_THROW(t.Add(1337 * i, 1234 * i));
+	}
 	
+	// should expand twice
+	ASSERT_EQUALS(t.Count(), 60);
+	#ifndef NDEBUG
+	ASSERT_EQUALS(t.Size(), 163);
+	#endif
+	
+	// 3)
+	ASSERT_NO_THROW(t.SetMinThreshold(0.4));
+	ASSERT_EQUALS(t.GetMinThreshold(), 0.4);
+	
+	// 4)
+	ASSERT_NO_THROW(t.Add(1337 * 60, 1234));
+	// should stay the same (below minimum)
+	ASSERT_EQUALS(t.Count(), 61);
+	#ifndef NDEBUG
+	ASSERT_EQUALS(t.Size(), 163);
+	#endif
+	
+	// 5)
+	ASSERT_NO_THROW(t.Remove(1337 * 60));
+	// should reduce once
+	ASSERT_EQUALS(t.Count(), 60);
+	#ifndef NDEBUG
+	ASSERT_EQUALS(t.Size(), 81);
+	#endif
+	
+	// 6)
+	ASSERT_NO_THROW(t.SetMaxThreshold(0.9));
+	ASSERT_EQUALS(t.GetMaxThreshold(), 0.9);
+	
+	// 7)
+	ASSERT_NO_THROW(t.Add(1337 * 60, 1234));
+	// should stay the same
+	ASSERT_EQUALS(t.Count(), 61);
+	#ifndef NDEBUG
+	ASSERT_EQUALS(t.Size(), 81);
+	#endif
+	
+	// 8)
+	for (int i = 61; i < 75; ++i) {
+		ASSERT_NO_THROW(t.Add(1337 * i, 1234 * i));
+	}
+	// should expand once
+	ASSERT_EQUALS(t.Count(), 75);
+	#ifndef NDEBUG
+	ASSERT_EQUALS(t.Size(), 163);
+	#endif
+
+	// 9)
+	for (int i = 0; i < 55; ++i) {
+		ASSERT_NO_THROW(t.Remove(1337 * i));
+	}
+	// should reduce twice
+	ASSERT_EQUALS(t.Count(), 20);
+	#ifndef NDEBUG
+	ASSERT_EQUALS(t.Size(), 40);
+	#endif
 	
 	return true;
 }
 	
+bool ArgsTest() {
+	ASSERT_THROW(HashTable<int>::InvalidArg, HashTable<int>(0, Multiply, One));
+	ASSERT_THROW(HashTable<int>::InvalidArg, HashTable<int>(-1, Multiply, One));
+	ASSERT_THROW(HashTable<int>::InvalidArg, HashTable<int>(10, NULL, One));
+	ASSERT_THROW(HashTable<int>::InvalidArg, HashTable<int>(10, Multiply, NULL));
+	
+	HashTable<int> t;
+	
+	t.Add(123, 345);
+	ASSERT_THROW(HashTable<int>::InvalidArg, t.Add(-12, 123));
+	ASSERT_THROW(HashTable<int>::InvalidArg, t.Get(-123));
+	ASSERT_THROW(HashTable<int>::InvalidArg, t.Remove(-123));
+	
+	ASSERT_THROW(HashTable<int>::InvalidArg, t.SetMaxThreshold(1.1));
+	ASSERT_THROW(HashTable<int>::InvalidArg, t.SetMaxThreshold(0.49));
+	ASSERT_THROW(HashTable<int>::InvalidArg, t.SetMaxThreshold(0));
+	ASSERT_THROW(HashTable<int>::InvalidArg, t.SetMaxThreshold(-123));
+	
+	ASSERT_THROW(HashTable<int>::InvalidArg, t.SetMinThreshold(-123));
+	ASSERT_THROW(HashTable<int>::InvalidArg, t.SetMinThreshold(0));
+	ASSERT_THROW(HashTable<int>::InvalidArg, t.SetMinThreshold(0.51));
+	ASSERT_THROW(HashTable<int>::InvalidArg, t.SetMinThreshold(1));
+	
+	
+	return true;
+}
 int main() {
 	RUN_TEST(EmptyTableTest);
 	RUN_TEST(AddRemoveTest);
@@ -247,6 +342,7 @@ int main() {
 	RUN_TEST(FullTableTest);
 	RUN_TEST(ResizingTest);
 	RUN_TEST(ResizingThresholdTest);
+	RUN_TEST(ArgsTest);
 	
 	return 0;	
 }

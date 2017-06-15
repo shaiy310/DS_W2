@@ -1,3 +1,12 @@
+// This module define an HashTable object with the following properties:
+//	* double-hashing: used two hash-functions to generate a hash for any given
+//		non-negative key.
+//	* dynamic-resizing: the table apart from the initial time, the table consist
+//		a number of element between minimum and maximum thresholds who can be
+//		modified by the user.
+//	* enable-updates: the table support updating of records: for exact same key,
+//		the table replaces the stored data.
+
 #ifndef __HASHTABLE_H__
 #define __HASHTABLE_H__
 
@@ -5,19 +14,18 @@
 #include <exception>
 #include <stdio.h>
 
-// hash table with dynamic size
-// double hashing
-// regular hash function - Multiply
-
+// a hash function
 typedef int (*hash_func)(int key, int size);
 
-// General hashing functions
+// General hashing functions: user can implement his own function
 // Module
+// complexity: O(1)
 int Module(int key, int size) {
 	return (key % size);
 }
 
 // Multiply
+// complexity: O(1)
 const int factor = 0.6180339887498949; // result of: (sqrt(5.0) - 1) / 2;
 int Multiply(int key, int size) {
 	float fraction = key * factor - ((int)(key * factor));
@@ -25,6 +33,7 @@ int Multiply(int key, int size) {
 }
 
 // One - used as second hash function for creating linear hashing
+// complexity: O(1)
 int One(int key, int size) {
 	// unused variables
 	(void)key;
@@ -64,8 +73,15 @@ public:
 	class CollidingKeys : public std::exception {};
 
 	// ~~~ C'tor ~~~
-	HashTable(int min_size=TABLE_SIZE, hash_func hash1=Multiply, hash_func hash2=Multiply) : 
+	HashTable(int min_size=TABLE_SIZE, hash_func hash1=Multiply, hash_func hash2=One) :
 		minimum_size(min_size), size(min_size), length(0), func1(hash1), func2(hash2) {
+		
+		if ((min_size < 1) ||
+			(hash1 == NULL) ||
+			(hash2 == NULL)) {
+			
+			throw InvalidArg();
+		}
 		
 		this->min_threshold = 0.25;
 		this->max_threshold = 0.75;
@@ -92,8 +108,8 @@ public:
 	// set the threshold for expanding the table.
 	void SetMaxThreshold(double new_threshold) {
 		// the maximum cant be larger than 1 because 1 represent a full table.
-		// also, it can't be below the minimum threshold for obvious reasons.
-		if ((new_threshold > 1) || (new_threshold <= this->min_threshold)) {
+		// also, it can't be below the half of the table.
+		if ((new_threshold > 1) || (new_threshold <= 0.5)) {
 			throw InvalidArg();
 		}
 		this->max_threshold = new_threshold;
@@ -107,8 +123,8 @@ public:
 	// set the threshold for reducing the table.
 	void SetMinThreshold(double new_threshold) {
 		// the minimum cant be non-positive number because 0 represent an empty table.
-		// also, it can't be over the maximum threshold for obvious reasons.
-		if ((new_threshold <= 0) || (new_threshold >= this->max_threshold)) {
+		// also, it can't be over the half of the table.
+		if ((new_threshold <= 0) || (new_threshold >= 0.5)) {
 			throw InvalidArg();
 		}
 		this->min_threshold = new_threshold;
@@ -188,6 +204,8 @@ private:
 		
 		//create a larger table.
 		HashTable<D> temp(new_size, this->func1, this->func2);
+		// new size should be enough to contain all items.
+		temp.SetMaxThreshold(1);
 		
 		// move all entries to the new table. (skip deleted entries)
 		for (int i = 0; i < this->size; ++i) {
